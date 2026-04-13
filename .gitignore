@@ -1,0 +1,50 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.eggs/
+*.egg
+
+# Virtual environment
+.venv/
+venv/
+env/
+
+# Credentials and secrets — never commit
+credentials.json
+token.pickle
+*.secret
+.env
+.env.*
+
+# Personal / unrelated files
+build_resume.py
+resume_preview.pdf
+
+# Science data — large files, generated outputs
+# Keep science_config.json; exclude everything else under projects/
+projects/**/*.db
+projects/**/*.pdf
+projects/**/*.tex
+projects/**/*.fits
+projects/**/*.fits.gz
+projects/**/raw/
+projects/**/calibrations/
+projects/**/archive_manifest.json
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# macOS
+.DS_Store
+
+# Claude Code internal state
+.claude/settings.local.json

@@ -1,0 +1,31 @@
+{
+  "project": "keck-lya-pilot",
+  "spatial_coverage": {
+    "mode": "rectangle",
+    "dec_min": 5.0,
+    "dec_max": 35.0,
+    "ra_min": null,
+    "ra_max": null,
+    "notes": "Keck-accessible: Dec 5-35 keeps targets within airmass ~1.5 at transit from Mauna Kea (lat 19.8N). No RA constraint — sample the full SDSS spectroscopic footprint in this Dec band."
+  },
+  "redshift": {
+    "z_min": 2.0,
+    "z_max": 3.5,
+    "z_floor": 2.0,
+    "z_floor_reason": "Below z=2.0, Lya (1216 A) redshifts to <3648 A — below KCWI's atmospheric blue cutoff (~3600 A)",
+    "z_ceiling_widen_to": 4.0
+  },
+  "target_n": null,
+  "instrument": "KCWI",
+  "target_skill": "target-qso-lya",
+  "science_goal": "UV-luminous z=2-3.5 QSOs observable with KCWI at Keck (Dec 5-35, airmass<1.5) for Lyman-alpha nebula detection. Prioritize by: (1) clear FoV — no bright star V<12 within 20 arcsec, (2) u-band brightness — brighter is a stronger Lya ionizing source, (3) ancillary data richness. No known extended Lya emission in literature.",
+  "catalog_priority": ["sdss", "simbad", "ned", "vizier"],
+  "catalog_notes": "Lead with SDSS DR17Q — best spectroscopic QSO catalog for this Dec range. SDSS is primary, not bonus. Rank final sample by u_mag ascending (brightest first) after quality cuts.",
+  "ranking_criteria": "u_mag ascending (brightest first); secondary sort by richness of ancillary data (X-ray, radio, HST flags from SIMBAD/NED)",
+  "literature_focus": "extended Lya emission, Lya nebula, Lya halo, Lyman-alpha blob, IFU spectroscopy, KCWI, CGM emission, circumgalactic medium, QSO nebula",
+  "rejection_flag": "lya_known",
+  "review_flag": "lya_possible",
+  "fov_instrument": "KCWI",
+  "fov_radius_arcsec": 20.0,
+  "bright_star_limit_mag": 12.0
+}
