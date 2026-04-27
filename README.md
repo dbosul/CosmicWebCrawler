@@ -26,7 +26,6 @@ Detecting them systematically requires:
 3. A cross-match against existing integral-field spectroscopy in public archives
 4. Reduction and analysis of IFU data cubes
 
-This is exactly the work I did by hand during my PhD. CosmicWebCrawler automates it.
 
 ---
 
@@ -65,26 +64,6 @@ makes every catalog query idempotent — interrupted runs resume safely.
 | Archive | Working | KOA TAP search; calibration matching; archive manifest |
 | Reduction | Stub | kcwidrp integration planned |
 | Analysis | Stub | cube stacking, moment maps, Lyα detection planned |
-
----
-
-## Quick start
-
-```bash
-git clone https://github.com/dbosul/CosmicWebCrawler
-cd CosmicWebCrawler
-python -m venv .venv && source .venv/bin/activate
-pip install -e ".[dev]"
-
-# Dry-run (no API calls, no catalog queries):
-python run.py --project my-pilot --stage sample --dry-run
-
-# Smoke tests:
-pytest tests/smoke_test_cosmos_pilot.py -v
-```
-
-A full run requires a `science_config.json` in `projects/<name>/` and an active
-`ANTHROPIC_API_KEY` for the agent layer.
 
 ---
 
