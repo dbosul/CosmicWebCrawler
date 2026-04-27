@@ -2,15 +2,10 @@
 
 > **How much of my PhD can Claude Code do?**
 
-This is an experiment in autonomous scientific research. I spent five years at Caltech hunting
-for Lyman-alpha nebulae around high-redshift quasars — systematically searching for glowing gas
-in the cosmic web around massive black holes at the peak of galaxy formation (z ≈ 2–3).
+This is an experiment in autonomous scientific research. CosmicWebCrawler is my attempt to replicate my PhD research pipeline (or similar) with a team of Claude agents. Essentially I'm building the assistant I wish I had for my PhD.
 
-CosmicWebCrawler is my attempt to replicate that research pipeline with a team of Claude agents.
-The science is real. The methodology follows the published
-[FLASHES Survey](https://ui.adsabs.harvard.edu/abs/2020ApJ...888...85C/abstract).
-The catalog queries hit live astronomical databases. The archive search runs against the actual
-Keck Observatory Archive.
+AI agents are (reasonably) not believed to be capable of 'doing science' autonomously - but ask any observer how much of their time is spent on conceptually simple but tedious tasks (sample selection, data reduction, data analysis, figure editing) and you start to see how AI can be used to dramatically accelerate scientific work. My gut feeling is that if I had a smart agentic platform, I could at least have cut my PhD timeline in half and still written a better thesis, by automating a lot of this work and focusing more of my time on the real science. (Less time writing grad-school code, more time reading the literature.)
+
 
 **Work in progress.** The sampling and archive search stages are functional; data reduction and
 emission-line analysis are stubs.

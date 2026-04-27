@@ -33,11 +33,12 @@ import db
 KOA_TAP_URL = "https://koa.ipac.caltech.edu/TAP/sync"
 KOA_DOWNLOAD_URL = "https://koa.ipac.caltech.edu/cgi-bin/getKOA/nph-getKOA"
 
-# Wavelength margin (Å) around Lyα window
-LYA_MARGIN_AA = 200.0
-
-# Default cone search radius (arcsec) — a 30" cone around each source centroid
-DEFAULT_RADIUS_ARCSEC = 30.0
+# Default cone search radius (arcsec).
+# KOA stores the telescope pointing RA/Dec, not the source centroid. In practice
+# KCWI pointings can be offset from the target by 20–40 arcsec (IFU placement,
+# guide star offsets, dithers). 60" safely captures all frames where the target
+# falls within any KCWI IFU footprint (largest slicer: 33"×20.4").
+DEFAULT_RADIUS_ARCSEC = 60.0
 
 # Volume warning threshold (GB) — pause before download if estimated volume exceeds this
 VOLUME_WARN_GB = 5.0
@@ -73,31 +74,25 @@ def _tap_query(adql: str, timeout: int = 60) -> list[dict]:
     return [dict(r) for r in reader]
 
 
-def _lya_wave_window(z: float) -> tuple[float, float]:
-    """Lyα wavelength window for a given redshift, with margin."""
-    centre = 1216.0 * (1.0 + z)
-    return centre - LYA_MARGIN_AA, centre + LYA_MARGIN_AA
-
-
-def query_science_frames(ra: float, dec: float, radius_arcsec: float, z: float) -> list[dict]:
+def query_science_frames(ra: float, dec: float, radius_arcsec: float) -> list[dict]:
     """
-    Cone search KOA for public KCWI science frames with wavelength coverage
-    overlapping the Lyα window at the source redshift.
+    Blind cone search: return ALL KCWI frames within radius_arcsec of the position.
+
+    No koaimtyp or wavelength filter — the probability of a calibration frame
+    landing on a science target without accompanying science frames is negligible,
+    and we should not pre-filter on grating setup or wavelength coverage.
+    The coordinator decides what is scientifically useful from the returned metadata.
     """
     radius_deg = radius_arcsec / 3600.0
-    wave_min, wave_max = _lya_wave_window(z)
 
     adql = f"""
-        SELECT koaid, ra, dec, date_obs, exptime,
+        SELECT koaid, ra, dec, date_obs, exptime, koaimtyp,
                bgratnam, ifunam, waveblue, wavered, wavecntr,
                progid, progpi, progtitl, targname,
-               statenam, stateid, filehand, semester, propint
+               statenam, stateid, filehand, semester
         FROM koa_kcwi
-        WHERE koaimtyp = 'object'
-          AND CONTAINS(POINT('ICRS', ra, dec),
+        WHERE CONTAINS(POINT('ICRS', ra, dec),
                        CIRCLE('ICRS', {ra}, {dec}, {radius_deg})) = 1
-          AND waveblue <= {wave_max}
-          AND wavered  >= {wave_min}
         ORDER BY date_obs DESC
     """
     return _tap_query(adql)
@@ -245,17 +240,10 @@ def run(
             print(f"[query_koa] {name}: already searched, skipping")
             continue
 
-        if z is None:
-            print(f"[query_koa] {name}: no redshift, cannot compute Lyα window — skipping")
-            db.update_source_status(project, sid, "accepted", ["no_redshift_for_koa"])
-            db.record_query(project, "koa", params, 0)
-            sources_no_data += 1
-            continue
-
-        print(f"[query_koa] Searching {name} (z={z:.3f}, RA={ra:.4f}, Dec={dec:.4f}) ...")
+        print(f"[query_koa] Searching {name} (z={z if z else '?'}, RA={ra:.4f}, Dec={dec:.4f}) ...")
 
         try:
-            frames = query_science_frames(ra, dec, search_radius_arcsec, z)
+            frames = query_science_frames(ra, dec, search_radius_arcsec)
         except requests.RequestException as exc:
             print(f"[query_koa] {name}: TAP query failed: {exc}")
             db.record_query(project, "koa", params, -1)
@@ -300,7 +288,8 @@ def run(
                 obs_date=obs_date,
                 public=True,
                 archive="KOA",
-                notes=f"grating={frame.get('bgratnam','?')} slicer={frame.get('ifunam','?')} "
+                notes=f"type={frame.get('koaimtyp','?')} grating={frame.get('bgratnam','?')} "
+                      f"slicer={frame.get('ifunam','?')} "
                       f"waveblue={frame.get('waveblue','?')} wavered={frame.get('wavered','?')}",
             )
 

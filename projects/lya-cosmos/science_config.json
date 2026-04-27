@@ -1,0 +1,26 @@
+{
+  "project": "lya-cosmos",
+  "spatial_coverage": {
+    "mode": "cone",
+    "ra": 150.1,
+    "dec": 2.2,
+    "radius_deg": 0.75,
+    "name": "COSMOS"
+  },
+  "redshift": {
+    "z_min": 2.05,
+    "z_max": 3.5,
+    "z_floor": 2.05,
+    "z_floor_reason": "KCWI BL throughput floor is 3700 A; Lya at z<2.04 falls below this. Using 2.05 for margin.",
+    "z_ceiling_widen_to": 3.6
+  },
+  "target_n": 5,
+  "instrument": "KCWI",
+  "target_skill": "target-qso-lya",
+  "catalog_priority": ["sdss", "vizier", "ned"],
+  "ranking_criteria": "uv_proxy_mag ascending (brightest UV first)",
+  "science_goal": "UV-luminous QSOs with no known extended Lya emission, suitable for KCWI IFU follow-up",
+  "literature_focus": "extended Lya emission, Lya nebula, Lya halo, Lyman-alpha blob, LAB, LAH, IFU spectroscopy, integral field, CGM emission, circumgalactic medium",
+  "rejection_flag": "lya_known",
+  "review_flag": "lya_possible"
+}

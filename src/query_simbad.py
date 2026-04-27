@@ -31,9 +31,12 @@ import db
 
 # SIMBAD condensed otype codes for QSO/AGN classes (simbad.cds.unistra.fr/guide/otypes)
 # Strip trailing '?' before matching.
-OBJECT_TYPES = {"QSO", "AGN", "SyG", "Sy1", "Sy2", "Bla", "BLL"}
+# rG (radio galaxy) included: powerful radio galaxies at z~2-3 are among the best-known
+# Lya nebula hosts (McCarthy+1987, van Ojik+1997, Reuland+2003) and must not be silently
+# excluded. UV-brightness ranking naturally deprioritises optically-faint radio galaxies.
+OBJECT_TYPES = {"QSO", "AGN", "SyG", "Sy1", "Sy2", "Bla", "BLL", "rG"}
 
-SIMBAD_TAP_URL = "https://simbad.cds.unistra.fr/simbad/tap/sync"
+SIMBAD_TAP_URL = "https://simbad.cds.unistra.fr/simbad/sim-tap/sync"
 
 
 # ---------------------------------------------------------------------------
@@ -245,6 +248,12 @@ def run_cone(
     raw_count = len(result)
     new_sources = 0
 
+    # Position dedup: load existing sources once before the loop.
+    # run_cone() uses astroquery (not TAP), so it cannot filter duplicates via ADQL.
+    # Without this, SDSS and SIMBAD entries for the same physical QSO are double-inserted
+    # under different names (e.g. "SDSS J..." vs "[VV2006] J...").
+    existing_coords = _existing_coords(project)
+
     for row in result:
         otype = str(row["otype"]).strip().rstrip("?")
         if otype not in OBJECT_TYPES:
@@ -271,6 +280,12 @@ def run_cone(
         name = str(row["main_id"]).strip()
         ra   = float(row["ra"])
         dec  = float(row["dec"])
+
+        # Positional dedup: skip if within 3 arcsec of an already-ingested source
+        if existing_coords is not None:
+            new_coord = SkyCoord(ra=ra, dec=dec, unit="deg")
+            if new_coord.separation(existing_coords).min().arcsec < 3.0:
+                continue
 
         u_mag = None
         g_mag = None

@@ -53,12 +53,25 @@ def _insert_rows(project: str, result) -> int:
         u_mag = float(row["psfMag_u"]) if row["psfMag_u"] < 30 else None
         g_mag = float(row["psfMag_g"]) if row["psfMag_g"] < 30 else None
         r_mag = float(row["psfMag_r"]) if row["psfMag_r"] < 30 else None
+        # mi_z2: absolute i-band mag K-corrected to z=2 from DR17Q VAC (Richards+2006).
+        # first_flux: FIRST peak flux density in mJy (0.0 = not detected, NULL = outside footprint).
+        # bi_civ: CIV balnicity index in km/s (0.0 = non-BAL, NULL = not measured).
+        # All three are NULL when source is not in the Quasar VAC (LEFT JOIN).
+        def _safe_float(val):
+            try:
+                return float(val)
+            except (TypeError, ValueError):
+                return None
+        mi_z2 = _safe_float(row["mi_z2"])
+        first_flux = _safe_float(row["first_flux"])
+        bi_civ = _safe_float(row["bi_civ"])
         db.insert_source(
             project=project,
             name=_make_name(ra, dec),
             ra=ra, dec=dec, z=z,
             z_source="SDSS_DR17",
             u_mag=u_mag, g_mag=g_mag, r_mag=r_mag,
+            mi_z2=mi_z2, first_flux=first_flux, bi_civ=bi_civ,
             added_by="skill:query_sdss",
         )
         new_sources += 1
@@ -105,7 +118,12 @@ def run(
 
     # DR17 (eBOSS) is intentional: final and most complete SDSS spectroscopic QSO catalog.
     # DR18+ are SDSS-V releases with a different targeting strategy.
-    # zWarning=16 (MANY_OUTLIERS) fires on broad-line QSOs at high S/N — include it.
+    # zWarning bitmask: all QSOs at z=2–3.5 in DR17 were targeted by eBOSS and observed with
+    # the BOSS spectrograph. SDSS documentation states MANY_OUTLIERS (bit 4 = 16) "is only
+    # ever set in data taken with the SDSS spectrograph, not the BOSS spectrograph" — so it
+    # will never fire for this sample. The (zWarning & ~16)=0 expression is nonetheless
+    # correct (vacuously allowing a bit that never appears) and harmless. Use it in preference
+    # to exact equality (=0 OR =16) which would miss combinations like zWarning=20.
     # sciencePrimary=1 ensures unique spectra only (no duplicate plate observations).
     # Direct WHERE clause on dec replaces fGetNearbyObjEq for full-footprint queries.
     ra_clause = ""
@@ -116,11 +134,13 @@ def run(
         SELECT
             s.ra, s.dec,
             p.psfMag_u, p.psfMag_g, p.psfMag_r,
-            s.z, s.specObjID
+            s.z, s.specObjID,
+            q.mi_z2, q.first_flux, q.bi_civ
         FROM SpecObj s
         JOIN PhotoObjAll p ON s.bestObjID = p.objID
+        LEFT JOIN Quasar q ON q.specObjID = s.specObjID
         WHERE s.class = 'QSO'
-          AND (s.zWarning = 0 OR s.zWarning = 16)
+          AND (s.zWarning = 0 OR (s.zWarning & ~16) = 0)
           AND s.sciencePrimary = 1
           AND s.z BETWEEN {z_min} AND {z_max}
           AND s.dec BETWEEN {dec_min} AND {dec_max}
@@ -182,12 +202,14 @@ def run_cone(
         SELECT
             s.ra, s.dec,
             p.psfMag_u, p.psfMag_g, p.psfMag_r,
-            s.z, s.specObjID
+            s.z, s.specObjID,
+            q.mi_z2, q.first_flux, q.bi_civ
         FROM dbo.fGetNearbyObjEq({ra_center}, {dec_center}, {radius_arcmin}) n
         JOIN SpecObj s ON n.objID = s.bestObjID
         JOIN PhotoObjAll p ON s.bestObjID = p.objID
+        LEFT JOIN Quasar q ON q.specObjID = s.specObjID
         WHERE s.class = 'QSO'
-          AND (s.zWarning = 0 OR s.zWarning = 16)
+          AND (s.zWarning = 0 OR (s.zWarning & ~16) = 0)
           AND s.sciencePrimary = 1
           AND s.z BETWEEN {z_min} AND {z_max}
     """

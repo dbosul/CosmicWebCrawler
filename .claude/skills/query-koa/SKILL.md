@@ -1,7 +1,7 @@
 ---
 name: query-koa
 description: Search the Keck Observatory Archive for public KCWI observations of accepted sample sources, match calibration frames, and optionally download raw FITS.
-argument-hint: <project> [--source-ids N [N ...]] [--radius 30.0] [--download] [--dest-dir PATH]
+argument-hint: <project> [--source-ids N [N ...]] [--radius 60.0] [--download] [--dest-dir PATH]
 allowed-tools: [Bash]
 ---
 

@@ -250,8 +250,14 @@ def run_cone(
     result = _query_ned_cone(ra_center, dec_center, radius_deg)
 
     if result is None:
-        db.record_query(project, "ned", params, result_count=0)
-        out = {"cached": False, "new_sources": 0, "raw_count": 0, "error": "NED query failed"}
+        # Record as -1 (failure), not 0 (genuine empty), so the query is not cached
+        # as "done". NED cone returns None for both network failures and empty results —
+        # we cannot distinguish them. In well-studied fields (e.g. COSMOS), a genuine
+        # empty is implausible; using -1 ensures the query is retried on the next run.
+        # Rectangle mode already uses -1 for the same reason.
+        db.record_query(project, "ned", params, result_count=-1)
+        out = {"cached": False, "new_sources": 0, "raw_count": 0,
+               "error": "NED query failed or empty — not cached, will retry"}
         print(json.dumps(out))
         return out
 

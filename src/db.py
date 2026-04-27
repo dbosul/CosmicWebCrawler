@@ -12,7 +12,7 @@ import sqlite3
 from pathlib import Path
 from typing import Optional
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 8
 
 
 # ---------------------------------------------------------------------------
@@ -53,7 +53,13 @@ def ensure_schema(project: str) -> None:
                 u_mag          REAL,
                 g_mag          REAL,
                 r_mag          REAL,
+                b_mag          REAL,
                 uv_luminosity  REAL,
+                uv_proxy_mag   REAL,
+                uv_proxy_band  TEXT,
+                mi_z2          REAL,
+                first_flux     REAL,
+                bi_civ         REAL,
                 status         TEXT NOT NULL DEFAULT 'candidate',
                 flags          TEXT NOT NULL DEFAULT '[]',
                 bias_weight    REAL DEFAULT 1.0,
@@ -122,6 +128,14 @@ def ensure_schema(project: str) -> None:
                 UNIQUE(database, params_hash)
             );
 
+            CREATE TABLE IF NOT EXISTS source_bibcodes (
+                id         INTEGER PRIMARY KEY AUTOINCREMENT,
+                source_id  INTEGER NOT NULL REFERENCES sources(id),
+                bibcode    TEXT NOT NULL,
+                created_at TEXT DEFAULT (datetime('now')),
+                UNIQUE(source_id, bibcode)
+            );
+
             CREATE TABLE IF NOT EXISTS koa_frames (
                 id              INTEGER PRIMARY KEY AUTOINCREMENT,
                 observation_id  INTEGER NOT NULL REFERENCES observations(id),
@@ -150,6 +164,50 @@ def ensure_schema(project: str) -> None:
             conn.execute(
                 "INSERT OR IGNORE INTO schema_version (version) VALUES (2)", ()
             )
+        if current < 3:
+            # v3: source_bibcodes table (already in CREATE IF NOT EXISTS above)
+            conn.execute("INSERT OR IGNORE INTO schema_version (version) VALUES (3)")
+        if current < 4:
+            # v4: uv_proxy_mag + uv_proxy_band columns on sources
+            for col, typedef in [("uv_proxy_mag", "REAL"), ("uv_proxy_band", "TEXT")]:
+                try:
+                    conn.execute(f"ALTER TABLE sources ADD COLUMN {col} {typedef}")
+                except sqlite3.OperationalError:
+                    pass  # column already exists (idempotent)
+            conn.execute("INSERT OR IGNORE INTO schema_version (version) VALUES (4)")
+        if current < 5:
+            # v5: b_mag column on sources (Milliquas Bmag — heterogeneous blue-band photometry)
+            try:
+                conn.execute("ALTER TABLE sources ADD COLUMN b_mag REAL")
+            except sqlite3.OperationalError:
+                pass  # column already exists (idempotent)
+            conn.execute("INSERT OR IGNORE INTO schema_version (version) VALUES (5)")
+        if current < 6:
+            # v6: indexes for common query patterns
+            # sources(status) — get_sources_by_status() called repeatedly in pipeline
+            # sources(ra, dec) — future spatial queries; no SQLite R-tree needed at <10k rows
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_sources_status ON sources(status)"
+            )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_sources_radec ON sources(ra, dec)"
+            )
+            conn.execute("INSERT OR IGNORE INTO schema_version (version) VALUES (6)")
+        if current < 7:
+            # v7: mi_z2 column — absolute i-band magnitude K-corrected to z=2 (SDSS DR17Q VAC)
+            try:
+                conn.execute("ALTER TABLE sources ADD COLUMN mi_z2 REAL")
+            except sqlite3.OperationalError:
+                pass  # column already exists (idempotent)
+            conn.execute("INSERT OR IGNORE INTO schema_version (version) VALUES (7)")
+        if current < 8:
+            # v8: first_flux (FIRST radio flux, mJy) and bi_civ (CIV balnicity index, km/s)
+            for col, typedef in [("first_flux", "REAL"), ("bi_civ", "REAL")]:
+                try:
+                    conn.execute(f"ALTER TABLE sources ADD COLUMN {col} {typedef}")
+                except sqlite3.OperationalError:
+                    pass
+            conn.execute("INSERT OR IGNORE INTO schema_version (version) VALUES (8)")
         conn.commit()
     finally:
         conn.close()
@@ -193,17 +251,36 @@ def insert_source(
     u_mag: Optional[float] = None,
     g_mag: Optional[float] = None,
     r_mag: Optional[float] = None,
+    b_mag: Optional[float] = None,
     uv_luminosity: Optional[float] = None,
+    mi_z2: Optional[float] = None,
+    first_flux: Optional[float] = None,
+    bi_civ: Optional[float] = None,
     added_by: Optional[str] = None,
 ) -> int:
-    """Insert or ignore (by name). Returns source_id."""
+    """Insert or ignore (by name). Returns source_id.
+
+    b_mag: Milliquas Bmag (heterogeneous: SDSS u, APM B, or USNO B depending on source).
+           Stored for human inspection and as a last-resort UV proxy for Milliquas-only
+           sources that lack g/r coverage. Do NOT apply SDSS u-band quality cuts to it.
+    mi_z2: Absolute i-band magnitude K-corrected to z=2 (Richards+2006 convention).
+           Provided by SDSS DR17Q VAC. Already an absolute magnitude — do not apply
+           a distance modulus. NULL for non-SDSS sources (Milliquas, NED).
+    first_flux: FIRST peak flux density in mJy. 0.0 = detected but below threshold or
+           not detected. NULL = source is outside the FIRST survey footprint. Do NOT
+           treat 0.0 and NULL as equivalent.
+    bi_civ: CIV balnicity index in km/s (Weymann+1991 definition). 0.0 = non-BAL.
+           NULL = not measured (low-z or spectrum quality issue). BI_CIV > 0 = BAL QSO.
+    """
     conn = get_connection(project)
     try:
         conn.execute(
             """INSERT OR IGNORE INTO sources
-               (name, ra, dec, z, z_source, u_mag, g_mag, r_mag, uv_luminosity, added_by)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            (name, ra, dec, z, z_source, u_mag, g_mag, r_mag, uv_luminosity, added_by),
+               (name, ra, dec, z, z_source, u_mag, g_mag, r_mag, b_mag, uv_luminosity,
+                mi_z2, first_flux, bi_civ, added_by)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (name, ra, dec, z, z_source, u_mag, g_mag, r_mag, b_mag, uv_luminosity,
+             mi_z2, first_flux, bi_civ, added_by),
         )
         conn.commit()
         cur = conn.execute("SELECT id FROM sources WHERE name = ?", (name,))
@@ -235,6 +312,42 @@ def update_source_status(
                 "UPDATE sources SET status = ?, updated_at = datetime('now') WHERE id = ?",
                 (status, source_id),
             )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def update_source_uv_proxy(
+    project: str,
+    source_id: int,
+    uv_proxy_mag: Optional[float],
+    uv_proxy_band: Optional[str],
+) -> None:
+    """Store the per-source UV proxy magnitude and the band it was drawn from."""
+    conn = get_connection(project)
+    try:
+        conn.execute(
+            "UPDATE sources SET uv_proxy_mag = ?, uv_proxy_band = ?, "
+            "updated_at = datetime('now') WHERE id = ?",
+            (uv_proxy_mag, uv_proxy_band, source_id),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def update_source_uv_luminosity(project: str, source_id: int, uv_luminosity: float) -> None:
+    """Store the absolute UV proxy magnitude (uv_luminosity column).
+
+    Value is absolute AB magnitude, e.g. −26 to −28 for luminous QSOs at z=2–3.5.
+    Computed from uv_proxy_mag minus the Planck18 distance modulus; no K-correction.
+    """
+    conn = get_connection(project)
+    try:
+        conn.execute(
+            "UPDATE sources SET uv_luminosity = ?, updated_at = datetime('now') WHERE id = ?",
+            (uv_luminosity, source_id),
+        )
         conn.commit()
     finally:
         conn.close()
@@ -597,6 +710,60 @@ def record_query(project: str, database: str, params: dict, result_count: int) -
 
 
 # ---------------------------------------------------------------------------
+# source_bibcodes
+# ---------------------------------------------------------------------------
+
+def insert_source_bibcode(project: str, source_id: int, bibcode: str) -> None:
+    """Insert or ignore. Silent no-op on duplicate (source_id, bibcode)."""
+    conn = get_connection(project)
+    try:
+        conn.execute(
+            "INSERT OR IGNORE INTO source_bibcodes (source_id, bibcode) VALUES (?, ?)",
+            (source_id, bibcode),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def get_query_count(project: str, database: str) -> int:
+    """Count of query_history entries for a given database name."""
+    conn = get_connection(project)
+    try:
+        cur = conn.execute(
+            "SELECT COUNT(*) FROM query_history WHERE database = ?", (database,)
+        )
+        return cur.fetchone()[0]
+    finally:
+        conn.close()
+
+
+def get_bibcodes_for_project(project: str) -> dict:
+    """Returns {bibcode: [source_id, ...]} for all rows in source_bibcodes."""
+    conn = get_connection(project)
+    try:
+        cur = conn.execute(
+            "SELECT bibcode, source_id FROM source_bibcodes ORDER BY bibcode, source_id"
+        )
+        result: dict = {}
+        for row in cur.fetchall():
+            result.setdefault(row["bibcode"], []).append(row["source_id"])
+        return result
+    finally:
+        conn.close()
+
+
+def get_bibcode_count(project: str) -> int:
+    """Count of distinct bibcodes in source_bibcodes."""
+    conn = get_connection(project)
+    try:
+        cur = conn.execute("SELECT COUNT(DISTINCT bibcode) FROM source_bibcodes")
+        return cur.fetchone()[0]
+    finally:
+        conn.close()
+
+
+# ---------------------------------------------------------------------------
 # Reporting
 # ---------------------------------------------------------------------------
 
@@ -617,12 +784,16 @@ def get_sample_summary(project: str) -> dict:
         cur = conn.execute("SELECT COUNT(*) FROM reading_queue WHERE status = 'pending'")
         queue_pending = cur.fetchone()[0]
 
+        cur = conn.execute("SELECT COUNT(DISTINCT bibcode) FROM source_bibcodes")
+        bibcode_count = cur.fetchone()[0]
+
         return {
             "total_sources": total,
             "by_status": by_status,
             "total_observations": obs_count,
             "total_bibliography": bib_count,
             "reading_queue_pending": queue_pending,
+            "total_bibcodes": bibcode_count,
         }
     finally:
         conn.close()

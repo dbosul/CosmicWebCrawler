@@ -1,0 +1,25 @@
+{
+  "project": "green-pea-south",
+  "field": {
+    "ra": 40.0,
+    "dec": -28.0,
+    "radius_deg": 1.5,
+    "name": "Eridanus-South pilot",
+    "notes": "KiDS-South footprint, VLT-accessible (altitude > 30 deg from Paranal), minimal SDSS coverage — use SIMBAD/NED/VizieR as primary catalogs"
+  },
+  "redshift": {
+    "z_min": 0.15,
+    "z_max": 0.40,
+    "z_floor": 0.15,
+    "z_floor_reason": "Below z=0.15, LyC (912 Å) redshifts to <1049 Å, below HST/COS G130M sensitivity and contaminated by geocoronal Lyman-alpha",
+    "z_ceiling_widen_to": 0.50
+  },
+  "target_n": 10,
+  "instrument": "VLT/MUSE",
+  "target_skill": "target-gp-lyc",
+  "science_goal": "Compact star-forming green pea / LyC leaker candidates with high [OIII]/[OII] ratio, suitable for HST/COS LyC detection and VLT/MUSE IFU characterization",
+  "literature_focus": "Lyman continuum leaker, LyC escape, green pea galaxy, compact star-forming, ionizing photon escape fraction, [OIII]/[OII] ratio, HST COS ultraviolet, LyC detection southern",
+  "rejection_flag": "lyc_observed",
+  "review_flag": "lyc_candidate_uncertain",
+  "catalog_notes": "SDSS coverage sparse below Dec=-10; prefer SIMBAD, NED, VizieR (2dFGRS J/MNRAS/328/1039 or GAMA). Flag any SDSS sources as bonus, not primary."
+}

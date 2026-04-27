@@ -1,7 +1,10 @@
 """
 query_vizier.py — Query VizieR catalogs for QSO candidates.
 
-Default catalog: Milliquas v8 (VII/290) — the most complete QSO compilation.
+Default catalog: Milliquas v8 (VII/294, Flesch 2023, PASA 40, e010).
+
+Column names verified against VizieR VII/294: RAJ2000, DEJ2000, Name, Type, Rmag, Bmag, z.
+Note: VII/290 (Milliquas v7.2) uses different column names (RAdeg, DEdeg); do not confuse.
 
 Supports two spatial modes:
 
@@ -24,21 +27,21 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 import db
 
-# Milliquas VII/290 column map: VizieR col -> our schema key
-# Column names verified against VII/290 ReadMe (quasars.org/Milliquas-ReadMe.txt)
+# Milliquas VII/294 (v8) column map: VizieR col -> our schema key
+# Column names verified empirically via astroquery against VII/294.
 # Bmag is heterogeneous (SDSS u, APM B, USNO B depending on source) — stored as b_mag,
 # NOT u_mag, to avoid conflating with SDSS u-band in photometric quality cuts.
 MILLIQUAS_COLUMN_MAP = {
-    "RA": "ra",
-    "DEC": "dec",
-    "Z": "z",
+    "RAJ2000": "ra",
+    "DEJ2000": "dec",
+    "z": "z",
     "Name": "name",
     "Rmag": "r_mag",
     "Bmag": "b_mag",
     "Type": "qso_type",
 }
 
-DEFAULT_CATALOG = "VII/290"  # Milliquas v8
+DEFAULT_CATALOG = "VII/294"  # Milliquas v8 (Flesch 2023, PASA 40, e010)
 
 # Milliquas type filter: broad-line types only
 # Q=QSO, A=AGN, B=BL Lac — excludes K=NLQSO, N=NLAGN (narrow-line; Lya geometry different)
@@ -94,6 +97,7 @@ def _insert_rows(project: str, result, catalog: str, existing_coords) -> int:
             ra=ra, dec=dec, z=z,
             z_source=f"VizieR:{catalog}",
             r_mag=mapped.get("r_mag"),
+            b_mag=mapped.get("b_mag"),  # Milliquas Bmag (heterogeneous blue-band)
             added_by="skill:query_vizier",
         )
         new_sources += 1
@@ -155,12 +159,13 @@ def run(
     from astroquery.vizier import Vizier
 
     # VizieR range constraint syntax: "min..max"
+    # Column names must match the catalog's actual VizieR column names (RAJ2000/DEJ2000/z for VII/294).
     constraints = {
-        "DEC": f"{dec_min}..{dec_max}",
-        "Z":   f"{z_min}..{z_max}",
+        "DEJ2000": f"{dec_min}..{dec_max}",
+        "z":       f"{z_min}..{z_max}",
     }
     if ra_min is not None and ra_max is not None:
-        constraints["RA"] = f"{ra_min}..{ra_max}"
+        constraints["RAJ2000"] = f"{ra_min}..{ra_max}"
 
     v = Vizier(columns=list(col_map.keys()), row_limit=-1)
 
@@ -246,8 +251,9 @@ def run_cone(
     result = result_list[0]
 
     # Filter z range post-query (cone mode gets all z from VizieR)
+    # Use lowercase "z" — the actual column name in VII/294.
     from astropy.table import Table
-    mask = (result["Z"] >= z_min) & (result["Z"] <= z_max)
+    mask = (result["z"] >= z_min) & (result["z"] <= z_max)
     result = result[mask]
 
     raw_count = len(result)

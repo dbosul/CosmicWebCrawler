@@ -18,11 +18,16 @@ building a sample for IFU Lyα emission follow-up with KCWI or PCWI.
 - `Bla`, `BLL` — blazars / BL Lac objects
 
 **Redshift constraints:**
-- Default range: z = 2.0 – 3.5
-- Hard floor at z = 2.0: below this, Lyα (1216 Å) falls below KCWI's atmospheric blue
-  cutoff (~3600 Å) and cannot be observed from the ground
-- Soft ceiling at z = 3.5: above this, QSO surface density in a typical 1 deg² field
-  drops sharply; widen to z = 4.0 only if target count is insufficient
+- Default range: z = 2.043 – 3.5  (Lyα at 3700–5456 Å, within KCWI BL bandpass)
+- Hard floor at z = 2.043: below this, Lyα (1216 Å) falls below the KCWI BL throughput
+  floor (~3700 Å; Morrissey et al. 2018, ApJ 864, 93, Fig. 8). Sources at z=2.0–2.043
+  have Lyα at 3648–3700 Å and will be rejected by the quality check.
+- Science floor at z ≈ 2.56 (Lyα ≈ 3900 Å): below this, BL throughput is 5–30% of peak.
+  Sources in z=2.043–2.56 can be targeted but require longer integrations; prefer z > 2.56
+  for low-surface-brightness nebula science. These are flagged `lya_blue_edge_science`.
+- Soft ceiling at z = 3.5: above this, QSO surface density drops sharply; widen to z = 3.6
+  only if target count is insufficient. **Do not widen above z = 3.6 for KCWI BL** — at
+  z=3.6, Lyα = 5594 Å near the BL red limit. At z=4.0, Lyα = 6080 Å (requires BM/BH3).
 
 **Photometry priority:**
 - SDSS u-band (AB) preferred: bright QSOs (u < 21) are stronger Lyα ionizing sources

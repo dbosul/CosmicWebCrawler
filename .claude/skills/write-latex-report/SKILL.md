@@ -82,6 +82,14 @@ Built with CosmicWebCrawler.
 - Math: standard LaTeX — `$z \sim 2$`, `$L_{\rm UV}$`, etc.
 - Journal macros: `\apj`, `\aj`, `\mnras`, `\aap` for reference lists
 
+## Known AASTeX 7.x constraints
+
+- **`\affiliation` and `\email` are required** for every author. The compile script injects
+  placeholders automatically — do not add `\noaffiliation` (removed in 7.x).
+- **`p{width}` column type is not supported in `deluxetable`/`deluxetable*`** — AASTeX's
+  custom column parser does not handle parameterised column types. Use `l` for the Notes
+  column and rely on natural word wrapping, or keep notes short.
+
 ## Notes
 
 - Requires BasicTeX + AASTeX: `brew install --cask basictex && sudo tlmgr install aastex`
